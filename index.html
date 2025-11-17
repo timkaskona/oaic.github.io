@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Интерактивный дашборд — брендовая версия (фикс растягивания)</title>
+  <title>Интерактивный дашборд — авто-загрузка данных</title>
   <!-- Библиотеки: чтение Excel и графики -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
@@ -46,6 +46,7 @@
     .controls { display:flex; flex-wrap: wrap; gap: 8px; align-items:center; }
     .btn { cursor:pointer; appearance:none; border: none; padding:8px 12px; border-radius: 10px; font-weight:600; }
     .btn-primary { background: var(--brand-primary); color:#fff; }
+    .btn-secondary { background: var(--brand-primary-100); color: var(--ink-900); }
 
     .select, select { appearance:none; padding:8px 12px; border-radius: 10px; border:1px solid var(--border); background:#fff; color:inherit; }
     .segmented { display:flex; background:#fff; border:1px solid var(--border); border-radius: 12px; overflow:hidden; }
@@ -78,6 +79,12 @@
     tbody td { padding:8px 10px; border-bottom:1px solid #f1f4f6; }
 
     .hint { font-size: 12px; color: var(--ink-600); }
+    .loading { display: inline-block; width: 16px; height: 16px; border: 2px solid #f3f3f3; border-top: 2px solid var(--brand-primary); border-radius: 50%; animation: spin 1s linear infinite; }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
 
     /* Декор */
     .dots { position: absolute; inset: -30px auto auto -30px; width: 120px; height: 120px; border-radius: 50%;
@@ -92,12 +99,13 @@
         <div class="brand-logo" aria-hidden="true"></div>
         <div>
           <h1>Интерактивный дашборд</h1>
-          <div class="sub">Загрузка Excel с планом/фактом • фильтры по месяцу/году • сравнение: к плану / к прошлому году / к предыдущему кварталу</div>
+          <div class="sub" id="status">Загрузка демо-данных... <span class="loading"></span></div>
         </div>
       </div>
       <div class="controls">
-        <label class="btn btn-primary" for="fileInput">📁 Загрузить Excel</label>
+        <label class="btn btn-primary" for="fileInput">📁 Загрузить свой Excel</label>
         <input id="fileInput" type="file" accept=".xlsx,.xls" hidden />
+        <button id="loadDemo" class="btn btn-secondary">🔄 Загрузить демо-данные</button>
 
         <select id="yearSelect" title="Год"></select>
         <select id="monthSelect" title="Месяц"></select>
@@ -231,6 +239,8 @@
     const $compare = document.getElementById('compareSelect');
     const $metric = document.getElementById('metricSelect');
     const $file = document.getElementById('fileInput');
+    const $loadDemo = document.getElementById('loadDemo');
+    const $status = document.getElementById('status');
 
     document.querySelectorAll('.segmented button').forEach(btn=>{
       btn.addEventListener('click', () => {
@@ -246,34 +256,111 @@
     $metric.onchange = () => { metric = $metric.value; renderAll(); };
 
     $file.addEventListener('change', handleFile);
+    $loadDemo.addEventListener('click', loadDemoData);
 
+    // ======= Функция загрузки демо-данных
+    async function loadDemoData() {
+      $status.innerHTML = 'Загрузка демо-данных... <span class="loading"></span>';
+      
+      try {
+        // Создаем демо-данные прямо в коде (без внешнего файла)
+        const demoData = generateDemoData();
+        processData(demoData.fact, demoData.plan);
+        $status.innerHTML = '✅ Демо-данные загружены • Можно загрузить свой Excel';
+        renderAll();
+      } catch (error) {
+        console.error('Ошибка загрузки демо-данных:', error);
+        $status.innerHTML = '❌ Ошибка загрузки • Попробуйте загрузить свой файл';
+      }
+    }
+
+    // ======= Генерация демо-данных
+    function generateDemoData() {
+      const projects = ['Проект А', 'Проект Б', 'Проект В', 'Проект Г', 'Проект Д'];
+      const categories = ['Разработка', 'Маркетинг', 'Администрирование', 'Дизайн', 'Консалтинг'];
+      const fact = [];
+      const plan = [];
+      
+      const currentYear = new Date().getFullYear();
+      
+      // Генерируем данные за последние 2 года
+      for (let year = currentYear - 1; year <= currentYear; year++) {
+        for (let month = 1; month <= 12; month++) {
+          for (const project of projects) {
+            const category = categories[Math.floor(Math.random() * categories.length)];
+            
+            // Фактические данные (с небольшими случайными отклонениями)
+            const baseRevenue = 200000 + Math.random() * 300000;
+            const baseCost = baseRevenue * (0.3 + Math.random() * 0.3);
+            const baseCommercial = baseRevenue * (0.1 + Math.random() * 0.1);
+            
+            fact.push({
+              date: new Date(year, month - 1, 15),
+              project,
+              category,
+              revenue: Math.round(baseRevenue * (0.8 + Math.random() * 0.4)),
+              cost: Math.round(baseCost * (0.8 + Math.random() * 0.4)),
+              commercial: Math.round(baseCommercial * (0.8 + Math.random() * 0.4))
+            });
+            
+            // Плановые данные (более стабильные)
+            plan.push({
+              date: new Date(year, month - 1, 1),
+              project,
+              category,
+              revenue: Math.round(baseRevenue),
+              cost: Math.round(baseCost),
+              commercial: Math.round(baseCommercial)
+            });
+          }
+        }
+      }
+      
+      return { fact, plan };
+    }
+
+    // ======= Обработка файла
     function handleFile(e){
-      const f = e.target.files?.[0]; if (!f) return;
+      const f = e.target.files?.[0]; 
+      if (!f) return;
+      
+      $status.innerHTML = 'Обработка файла... <span class="loading"></span>';
+      
       const reader = new FileReader();
       reader.onload = (evt) => {
-        const wb = XLSX.read(new Uint8Array(evt.target.result), {type:'array'});
+        try {
+          const wb = XLSX.read(new Uint8Array(evt.target.result), {type:'array'});
 
-        const findSheet = (namePart) => wb.SheetNames.find(s => s.toLowerCase().includes(namePart));
-        const sFact = wb.Sheets[ findSheet('факт') || 'Факт' ] || wb.Sheets[wb.SheetNames[0]];
-        const sPlan = wb.Sheets[ findSheet('план') || 'План' ] || wb.Sheets[wb.SheetNames[1]] || wb.Sheets[wb.SheetNames[0]];
+          const findSheet = (namePart) => wb.SheetNames.find(s => s.toLowerCase().includes(namePart));
+          const sFact = wb.Sheets[ findSheet('факт') || 'Факт' ] || wb.Sheets[wb.SheetNames[0]];
+          const sPlan = wb.Sheets[ findSheet('план') || 'План' ] || wb.Sheets[wb.SheetNames[1]] || wb.Sheets[wb.SheetNames[0]];
 
-        const jFact = XLSX.utils.sheet_to_json(sFact).map(mapRow).filter(r=>r.date);
-        const jPlan = XLSX.utils.sheet_to_json(sPlan).map(mapRow).filter(r=>r.date);
+          const jFact = XLSX.utils.sheet_to_json(sFact).map(mapRow).filter(r=>r.date);
+          const jPlan = XLSX.utils.sheet_to_json(sPlan).map(mapRow).filter(r=>r.date);
 
-        fact = jFact.map(r=> ({...r, type:'fact', y:r.date.getFullYear(), m:r.date.getMonth()+1, q:getQuarter(r.date.getMonth()+1)}));
-        plan = jPlan.map(r=> ({...r, type:'plan', y:r.date.getFullYear(), m:r.date.getMonth()+1, q:getQuarter(r.date.getMonth()+1)}));
-
-        // Заполняем селект годов/месяцев
-        const years = Array.from(new Set(fact.map(r=>r.y).concat(plan.map(r=>r.y)))).sort((a,b)=>b-a);
-        $year.innerHTML = years.map(y=>`<option value="${y}">${y}</option>`).join('');
-        selectedYear = years[0];
-
-        $month.innerHTML = `<option value="0">Все месяцы</option>` + RU_MONTHS.map((m, i)=>`<option value="${i+1}">${m}</option>`).join('');
-        selectedMonth = 0;
-
-        renderAll();
+          processData(jFact, jPlan);
+          $status.innerHTML = '✅ Файл загружен • Можно загрузить другой или демо-данные';
+          
+        } catch (error) {
+          console.error('Ошибка обработки файла:', error);
+          $status.innerHTML = '❌ Ошибка обработки файла • Проверьте формат';
+        }
       };
       reader.readAsArrayBuffer(f);
+    }
+
+    // ======= Общая функция обработки данных
+    function processData(jFact, jPlan) {
+      fact = jFact.map(r=> ({...r, type:'fact', y:r.date.getFullYear(), m:r.date.getMonth()+1, q:getQuarter(r.date.getMonth()+1)}));
+      plan = jPlan.map(r=> ({...r, type:'plan', y:r.date.getFullYear(), m:r.date.getMonth()+1, q:getQuarter(r.date.getMonth()+1)}));
+
+      // Заполняем селект годов/месяцев
+      const years = Array.from(new Set(fact.map(r=>r.y).concat(plan.map(r=>r.y)))).sort((a,b)=>b-a);
+      $year.innerHTML = years.map(y=>`<option value="${y}">${y}</option>`).join('');
+      selectedYear = years[0];
+
+      $month.innerHTML = `<option value="0">Все месяцы</option>` + RU_MONTHS.map((m, i)=>`<option value="${i+1}">${m}</option>`).join('');
+      selectedMonth = 0;
     }
 
     // ======= Расчёты
@@ -520,6 +607,11 @@
         profit:'Прибыль'
       })[k];
     }
+
+    // ======= Автоматическая загрузка при старте
+    window.addEventListener('DOMContentLoaded', () => {
+      loadDemoData();
+    });
   </script>
 </body>
 </html>
